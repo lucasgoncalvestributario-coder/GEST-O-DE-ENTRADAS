@@ -324,10 +324,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             {/* Note */}
-            <div className="p-3.5 bg-[#12151e] border border-[#273043] rounded-2xl text-xs text-slate-400 flex items-start gap-2.5">
-              <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <strong className="text-slate-200">Garantia Matemática:</strong> Caso a loja esteja fechada em algum dia (ex: feira ou evento), a meta daquele dia é automaticamente redistribuída entre os outros {openDaysCount} dias operacionais abertos, mantendo o faturamento total do mês intacto.
+            <div className="space-y-2.5">
+              <div className="p-3.5 bg-[#12151e] border border-[#273043] rounded-2xl text-xs text-slate-400 flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-slate-200">Garantia Matemática de Fechamento:</strong> Caso a loja esteja fechada em algum dia (ex: feira ou evento), a meta daquele dia é automaticamente redistribuída entre os outros {openDaysCount} dias operacionais abertos, mantendo o faturamento total do mês intacto.
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-amber-950/20 border border-amber-500/30 rounded-2xl text-xs text-amber-200/90 flex items-start gap-2.5">
+                <Target className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-amber-300">Compensação Automática de Metas Não Batidas:</strong> Quando a meta não é batida em algum dia, o valor que faltou é automaticamente distribuído em partes iguais entre todos os dias restantes do mês, mantendo a meta mensal no ritmo certo.
+                </div>
               </div>
             </div>
           </div>

@@ -259,7 +259,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
                   <div className="mt-2 space-y-2">
                     <div className="text-xs text-slate-300 flex items-center gap-2 flex-wrap">
-                      <span>Meta total de hoje: <strong className="text-slate-100 font-mono">{formatCurrency(calc.todayTarget)}</strong></span>
+                      <span>Meta ajustada de hoje: <strong className="text-slate-100 font-mono">{formatCurrency(calc.todayTarget)}</strong></span>
+                      {calc.todayDeficitAdded !== undefined && calc.todayDeficitAdded > 0 && (
+                        <span className="text-amber-400/90 text-[11px] bg-amber-950/40 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono">
+                          (Base: {formatCurrency(calc.todayBaseTarget || calc.todayTarget)} + {formatCurrency(calc.todayDeficitAdded)} redistribuído)
+                        </span>
+                      )}
                       <span className="text-slate-500">•</span>
                       <span>Vendido hoje: <strong className="text-emerald-400 font-mono">{formatCurrency(calc.todaySales)}</strong></span>
                       {calc.todayGorduraUsed > 0 && (
@@ -291,9 +296,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                          Falta vender <strong className="text-amber-300 font-mono">{formatCurrency(calc.todayRemainingTarget)}</strong> hoje para atingir o objetivo do dia.
-                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-400">
+                          <p>
+                            Falta vender <strong className="text-amber-300 font-mono">{formatCurrency(calc.todayRemainingTarget)}</strong> hoje para atingir o objetivo do dia.
+                          </p>
+                          <span className="text-[11px] text-slate-500">
+                            (Se não bater, o valor faltante é redistribuído nos dias restantes)
+                          </span>
+                        </div>
 
                         {/* Fast 1-Click Gordura Rescue Button */}
                         {availableGordura > 0 && onQuickCompleteTodayWithGordura && (

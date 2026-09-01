@@ -111,23 +111,40 @@ export function isDateInClosedPeriods(
 }
 
 /**
- * Calculate the exact weighted daily targets for all days of the month.
- * The sum of all open days equals the exact monthly target amount.
+ * Calculate the exact weighted daily targets for all days of the month,
+ * with dynamic equal redistribution of unachieved targets to remaining operational days.
  */
 export function calculateDayTargetsForMonth(
   monthKey: string,
   targetAmount: number,
-  closedPeriods: ClosedPeriod[] = []
+  closedPeriods: ClosedPeriod[] = [],
+  sales: Sale[] = [],
+  gorduraUsages: GorduraUsage[] = [],
+  currentDateObj: Date = new Date()
 ): DayTargetInfo[] {
   const [yearStr, monthStr] = (monthKey || '2026-09').split('-');
   const year = parseInt(yearStr, 10) || 2026;
   const monthIndex = (parseInt(monthStr, 10) || 9) - 1;
   const totalDays = new Date(year, monthIndex + 1, 0).getDate();
 
+  const currentYear = currentDateObj.getFullYear();
+  const currentMonthIdx = currentDateObj.getMonth();
+  const currentDay = currentDateObj.getDate();
+
+  // Determine current day context
+  let evaluatedDay: number;
+  if (year === currentYear && monthIndex === currentMonthIdx) {
+    evaluatedDay = Math.min(currentDay, totalDays);
+  } else if (year < currentYear || (year === currentYear && monthIndex < currentMonthIdx)) {
+    evaluatedDay = totalDays; // Past month: all days evaluated
+  } else {
+    evaluatedDay = 0; // Future month: no past days evaluated
+  }
+
   const days: DayTargetInfo[] = [];
   let totalWeightOpenDays = 0;
 
-  // Step 1: identify days, day-of-week, closed status and weights
+  // Step 1: Identify days, day-of-week, closed status and weights
   for (let day = 1; day <= totalDays; day++) {
     const dayStr = day < 10 ? `0${day}` : `${day}`;
     const dateStr = `${yearStr}-${monthStr}-${dayStr}`;
@@ -151,24 +168,76 @@ export function calculateDayTargetsForMonth(
       weight: isClosed ? 0 : weight,
       isClosed,
       closedReason: reason,
+      baseTarget: 0,
+      deficitAdded: 0,
       target: 0,
+      sales: 0,
+      gorduraUsed: 0,
+      effectiveSales: 0,
+      isMet: false,
+      missingDeficit: 0,
     });
   }
 
-  // Step 2: compute exact target for each open day so sum === targetAmount
+  // Step 2: Compute base weighted target for each open day (sum === targetAmount)
   if (totalWeightOpenDays > 0 && targetAmount > 0) {
     let accumulated = 0;
     const openDays = days.filter((d) => !d.isClosed);
     openDays.forEach((d, idx) => {
       if (idx === openDays.length - 1) {
-        // Last open day absorbs any fractional cent difference to guarantee exact match
-        d.target = Math.max(0, Math.round((targetAmount - accumulated) * 100) / 100);
+        // Last open day absorbs any fractional cent difference
+        d.baseTarget = Math.max(0, Math.round((targetAmount - accumulated) * 100) / 100);
       } else {
         const val = Math.round(((targetAmount * d.weight) / totalWeightOpenDays) * 100) / 100;
-        d.target = val;
+        d.baseTarget = val;
         accumulated += val;
       }
+      d.target = d.baseTarget;
+      d.deficitAdded = 0;
     });
+  }
+
+  // Step 3: If sales exist or past days have elapsed, dynamically redistribute unachieved deficits
+  const monthSales = (sales || []).filter((s) => s.monthKey === monthKey);
+  const monthUsages = (gorduraUsages || []).filter((u) => u.monthKey === monthKey);
+
+  const openDays = days.filter((d) => !d.isClosed);
+
+  for (let i = 0; i < openDays.length; i++) {
+    const currentOpenDay = openDays[i];
+    const daySalesList = monthSales.filter((s) => s.date === currentOpenDay.date);
+    const daySalesTotal = daySalesList.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+    const dayUsages = monthUsages.filter((u) => u.date === currentOpenDay.date);
+    const dayGorduraUsed = dayUsages.reduce((acc, u) => acc + (u.amount || 0), 0);
+    const effectiveTotal = daySalesTotal + dayGorduraUsed;
+
+    currentOpenDay.sales = daySalesTotal;
+    currentOpenDay.gorduraUsed = dayGorduraUsed;
+    currentOpenDay.effectiveSales = effectiveTotal;
+    currentOpenDay.isMet = currentOpenDay.target > 0 && effectiveTotal >= currentOpenDay.target;
+
+    // Check if this day is completed (strictly in the past relative to evaluatedDay)
+    const isPastDay = currentOpenDay.dayNumber < evaluatedDay;
+
+    if (isPastDay && currentOpenDay.target > 0) {
+      if (effectiveTotal < currentOpenDay.target) {
+        // Day missed target: calculate missing deficit
+        const deficit = Math.max(0, currentOpenDay.target - effectiveTotal);
+        currentOpenDay.missingDeficit = Math.round(deficit * 100) / 100;
+
+        // Distribute this deficit equally among remaining open days (i+1 to end)
+        const remainingOpenDays = openDays.slice(i + 1);
+        if (remainingOpenDays.length > 0 && deficit > 0) {
+          const sharePerDay = deficit / remainingOpenDays.length;
+          for (let k = i + 1; k < openDays.length; k++) {
+            openDays[k].deficitAdded += sharePerDay;
+            openDays[k].target = Math.round((openDays[k].baseTarget + openDays[k].deficitAdded) * 100) / 100;
+          }
+        }
+      } else {
+        currentOpenDay.missingDeficit = 0;
+      }
+    }
   }
 
   return days;
@@ -176,7 +245,7 @@ export function calculateDayTargetsForMonth(
 
 /**
  * Calculate the Gordura (Surplus / Reserve) balance for a month.
- * - Gordura is generated whenever a day's sales exceed that day's weighted target.
+ * - Gordura is generated whenever a day's sales exceed that day's target.
  * - Gordura is consumed when used to complete the target of a day.
  */
 export function calculateGorduraBalance(
@@ -184,9 +253,17 @@ export function calculateGorduraBalance(
   targetAmount: number,
   sales: Sale[] = [],
   closedPeriods: ClosedPeriod[] = [],
-  gorduraUsages: GorduraUsage[] = []
+  gorduraUsages: GorduraUsage[] = [],
+  currentDateObj: Date = new Date()
 ): GorduraBalance {
-  const dayTargets = calculateDayTargetsForMonth(monthKey, targetAmount, closedPeriods);
+  const dayTargets = calculateDayTargetsForMonth(
+    monthKey,
+    targetAmount,
+    closedPeriods,
+    sales,
+    gorduraUsages,
+    currentDateObj
+  );
   const monthSales = (sales || []).filter((s) => s.monthKey === monthKey);
   const monthUsages = (gorduraUsages || []).filter((u) => u.monthKey === monthKey);
 
@@ -270,8 +347,15 @@ export function calculateMonthTarget(
   const totalExpenses = monthExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
   const netResult = totalSales - totalExpenses;
 
-  // Calculate weighted day targets for the whole month
-  const dayTargets = calculateDayTargetsForMonth(monthKey, targetAmount, safeClosedPeriods);
+  // Calculate weighted day targets with dynamic deficit redistribution for the whole month
+  const dayTargets = calculateDayTargetsForMonth(
+    monthKey,
+    targetAmount,
+    safeClosedPeriods,
+    safeSales,
+    safeUsages,
+    currentDateObj
+  );
 
   // Gordura Reserve balance
   const gorduraBalance = calculateGorduraBalance(
@@ -279,7 +363,8 @@ export function calculateMonthTarget(
     targetAmount,
     safeSales,
     safeClosedPeriods,
-    safeUsages
+    safeUsages,
+    currentDateObj
   );
 
   // Determine current day in the context of the selected month
@@ -307,15 +392,22 @@ export function calculateMonthTarget(
   const todayDateStr = `${yearStr}-${monthStr}-${todayDayStr}`;
   const todayDayInfo = dayTargets.find((d) => d.date === todayDateStr) || dayTargets[0] || {
     target: 0,
+    baseTarget: 0,
+    deficitAdded: 0,
     tier: 'media' as DayWeightTier,
     tierLabel: 'Meta Média',
     dayOfWeekName: 'Hoje',
   };
 
   const todayTarget = todayDayInfo.target || 0;
+  const todayBaseTarget = todayDayInfo.baseTarget || todayTarget;
+  const todayDeficitAdded = todayDayInfo.deficitAdded || 0;
   const todayTier = todayDayInfo.tier || ('media' as DayWeightTier);
   const todayTierLabel = todayDayInfo.tierLabel || 'Meta Média';
   const todayDayOfWeekName = todayDayInfo.dayOfWeekName || 'Hoje';
+
+  // Total deficit redistributed across the month
+  const totalDeficitRedistributed = dayTargets.reduce((acc, d) => acc + (d.missingDeficit || 0), 0);
 
   // Calculate sales made today (evaluated day)
   const todaySalesList = monthSales.filter((s) => s.date === todayDateStr);
@@ -424,6 +516,9 @@ export function calculateMonthTarget(
     operationalDailyAverage,
     projectionAmount,
     requiredPerOperationalDay,
+    todayBaseTarget,
+    todayDeficitAdded,
+    totalDeficitRedistributed,
     todayTarget,
     todaySales,
     todayGorduraUsed,
@@ -476,12 +571,17 @@ export function calculateDailyClosing(
   const dayOfWeekName = DAY_OF_WEEK_NAMES[dayOfWeek];
   const { tier, tierLabel } = getDayWeightAndTier(dayOfWeek);
 
-  // Find exact weighted daily target from targetCalc dayTargets
+  // Find exact weighted daily target and redistribution info from targetCalc dayTargets
   let dailyTarget = 0;
+  let baseDailyTarget = 0;
+  let deficitAddedToday = 0;
+
   if (targetCalc && targetCalc.dayTargets && targetCalc.dayTargets.length > 0) {
     const match = targetCalc.dayTargets.find((d) => d.date === targetDateStr);
     if (match) {
       dailyTarget = match.target;
+      baseDailyTarget = match.baseTarget;
+      deficitAddedToday = match.deficitAdded;
     }
   }
 
@@ -491,6 +591,7 @@ export function calculateDailyClosing(
     const targets = calculateDayTargetsForMonth(`${yearStr}-${monthStr}`, targetAmt, closedPeriods);
     const match = targets.find((d) => d.date === targetDateStr);
     dailyTarget = match ? match.target : targetAmt / 26;
+    baseDailyTarget = match ? match.baseTarget : dailyTarget;
   }
 
   // Gordura used on this specific day
@@ -502,6 +603,14 @@ export function calculateDailyClosing(
   const remainingDailyTarget = Math.max(0, dailyTarget - effectiveSalesToday);
   const diff = Math.abs(effectiveSalesToday - dailyTarget);
 
+  // Calculate redistribution impact if target was not met
+  const dayNum = parseInt(dayStr, 10) || 1;
+  const remainingOpenDays = targetCalc?.dayTargets?.filter((d) => !d.isClosed && d.dayNumber > dayNum) || [];
+  const remainingOpenDaysCount = remainingOpenDays.length;
+  const unmetDeficit = Math.max(0, dailyTarget - effectiveSalesToday);
+  const unmetDeficitDistributedPerDay =
+    remainingOpenDaysCount > 0 && unmetDeficit > 0 ? unmetDeficit / remainingOpenDaysCount : 0;
+
   const availableGordura = targetCalc?.gorduraBalance?.available ?? 0;
 
   return {
@@ -510,6 +619,10 @@ export function calculateDailyClosing(
     expensesToday,
     resultToday,
     dailyTarget,
+    baseDailyTarget,
+    deficitAddedToday,
+    unmetDeficitDistributedPerDay,
+    remainingOpenDaysCount,
     gorduraUsedToday,
     effectiveSalesToday,
     remainingDailyTarget,

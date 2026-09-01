@@ -74,8 +74,16 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
 💸 *Saídas hoje:* ${formatCurrency(closingData.expensesToday)} (${closingData.expensesCount} saídas)
 💵 *Resultado do dia:* ${formatCurrency(closingData.resultToday)}
 
-🎯 *Meta do dia:* ${formatCurrency(closingData.dailyTarget)}
-📌 *Status:* ${statusText}`;
+🎯 *Meta do dia:* ${formatCurrency(closingData.dailyTarget)}${
+      closingData.deficitAddedToday && closingData.deficitAddedToday > 0
+        ? ` (Base: ${formatCurrency(closingData.baseDailyTarget || closingData.dailyTarget)} + ${formatCurrency(closingData.deficitAddedToday)} redistribuído)`
+        : ''
+    }
+📌 *Status:* ${statusText}${
+      !closingData.isDailyTargetMet && (closingData.remainingOpenDaysCount || 0) > 0
+        ? `\n🔄 *Redistribuição:* +${formatCurrency(closingData.unmetDeficitDistributedPerDay || 0)}/dia adicionado aos ${closingData.remainingOpenDaysCount} dias restantes do mês.`
+        : ''
+    }`;
   };
 
   const handleCopy = () => {
@@ -265,6 +273,8 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
               <p className="text-xs mt-0.5 opacity-90 leading-relaxed">
                 {closingData.isDailyTargetMet
                   ? 'Excelente trabalho! O faturamento do dia atingiu a meta planejada.'
+                  : (closingData.remainingOpenDaysCount || 0) > 0
+                  ? `O saldo faltante de ${formatCurrency(closingData.diff)} é automaticamente distribuído em partes iguais (+${formatCurrency(closingData.unmetDeficitDistributedPerDay || 0)}/dia) entre os ${closingData.remainingOpenDaysCount} dias restantes do mês.`
                   : 'A meta diária é uma referência de ritmo para distribuir os objetivos do mês.'}
               </p>
             </div>
