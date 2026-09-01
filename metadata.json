@@ -1,0 +1,6 @@
+{
+  "name": "Fronteira Cutelaria - Gestão",
+  "description": "Sistema completo de gestão, vendas, saídas, metas operacionais inteligentes e projeções da Fronteira Cutelaria.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,244 @@
+export type UserRole = 'admin' | 'operator';
+export type TabType = 'dashboard' | 'sales' | 'expenses' | 'reports' | 'settings';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+}
+
+export type SaleCategory =
+  | 'faca'
+  | 'tabua'
+  | 'copo'
+  | 'afiacao'
+  | 'restauracao'
+  | 'polimento'
+  | 'outro';
+
+export type ExpenseCategory =
+  | 'fornecedor'
+  | 'aluguel'
+  | 'ferramenta'
+  | 'material'
+  | 'frete'
+  | 'divulgacao'
+  | 'pagamento'
+  | 'contas'
+  | 'outro';
+
+export type PaymentMethod =
+  | 'pix'
+  | 'dinheiro'
+  | 'debito'
+  | 'credito'
+  | 'outro';
+
+export interface Sale {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time?: string; // HH:mm
+  monthKey: string; // YYYY-MM
+  category: SaleCategory;
+  categoryName?: string;
+  productId?: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  paymentMethod: PaymentMethod;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  notes?: string;
+  createdAt: number;
+  createdBy?: string;
+}
+
+export interface Expense {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time?: string;
+  monthKey: string; // YYYY-MM
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  supplierId?: string;
+  supplierName?: string;
+  notes?: string;
+  createdAt: number;
+  createdBy?: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  code?: string;
+  category: 'facas' | 'tabuas' | 'copos' | 'outros' | 'servicos';
+  costPrice: number;
+  sellingPrice: number;
+  stock: number;
+  minStock: number;
+  photoUrl?: string;
+  isService?: boolean;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  birthDate?: string;
+  notes?: string;
+  createdAt: number;
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  phone: string;
+  cnpjCpf?: string;
+  notes?: string;
+  createdAt: number;
+}
+
+export interface MonthlyGoal {
+  id: string;
+  monthKey: string; // YYYY-MM
+  targetAmount: number;
+  updatedAt: number;
+}
+export type Goal = MonthlyGoal;
+
+export type ClosedReason =
+  | 'evento'
+  | 'ferias'
+  | 'feira'
+  | 'viagem'
+  | 'manutencao'
+  | 'feriado'
+  | 'outro';
+
+export interface ClosedPeriod {
+  id: string;
+  name: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  reason: ClosedReason;
+  notes?: string;
+  monthKeys: string[];
+}
+
+export type DayWeightTier = 'baixa' | 'media' | 'alta';
+
+export interface DayTargetInfo {
+  date: string; // YYYY-MM-DD
+  dayNumber: number;
+  dayOfWeek: number; // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+  dayOfWeekName: string;
+  tier: DayWeightTier;
+  tierLabel: string;
+  weight: number;
+  isClosed: boolean;
+  closedReason?: string;
+  target: number;
+}
+
+export type GoalStatus =
+  | 'target_achieved'
+  | 'above_pace'
+  | 'on_pace'
+  | 'attention'
+  | 'behind_pace';
+
+export interface GorduraUsage {
+  id: string;
+  date: string; // YYYY-MM-DD
+  monthKey: string; // YYYY-MM
+  amount: number;
+  reason?: string;
+  createdAt: number;
+  createdBy?: string;
+}
+
+export interface GorduraDaySummary {
+  date: string;
+  dayNumber: number;
+  dayOfWeekName: string;
+  dailyTarget: number;
+  sales: number;
+  surplusGenerated: number;
+  gorduraUsed: number;
+  effectiveTotal: number;
+  isMet: boolean;
+  status: 'surplus' | 'used' | 'met' | 'under';
+}
+
+export interface GorduraBalance {
+  monthKey: string;
+  totalGenerated: number;
+  totalUsed: number;
+  available: number;
+  daysWithSurplus: GorduraDaySummary[];
+  usages: GorduraUsage[];
+}
+
+export interface TargetCalculation {
+  monthKey: string;
+  year: number;
+  monthIndex: number; // 0-11
+  targetAmount: number;
+  totalSales: number;
+  totalExpenses: number;
+  netResult: number;
+  progressPercentage: number;
+  totalDaysInMonth: number;
+  closedDaysCount: number;
+  operationalDaysTotal: number;
+  elapsedOperationalDays: number;
+  remainingOperationalDays: number;
+  operationalDailyAverage: number;
+  projectionAmount: number;
+  requiredPerOperationalDay: number;
+  todayTarget: number;
+  todaySales: number;
+  todayGorduraUsed: number;
+  todayEffectiveSales: number;
+  todayRemainingTarget: number;
+  isTodayTargetMet: boolean;
+  todaySurplus: number;
+  todayTier: DayWeightTier;
+  todayTierLabel: string;
+  todayDayOfWeekName: string;
+  dayTargets: DayTargetInfo[];
+  remainingToTarget: number;
+  isTargetMet: boolean;
+  surplusAmount: number;
+  status: GoalStatus;
+  statusTitle: string;
+  statusMessage: string;
+  salesCount: number;
+  expensesCount: number;
+  // Gordura Reserve
+  gorduraBalance: GorduraBalance;
+}
+
+export interface DailyClosingData {
+  date: string;
+  salesToday: number;
+  expensesToday: number;
+  resultToday: number;
+  dailyTarget: number;
+  gorduraUsedToday: number;
+  effectiveSalesToday: number;
+  remainingDailyTarget: number;
+  availableGordura: number;
+  dayTier?: DayWeightTier;
+  dayTierLabel?: string;
+  dayOfWeekName?: string;
+  isDailyTargetMet: boolean;
+  diff: number;
+  salesCount: number;
+  expensesCount: number;
+}

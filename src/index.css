@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@keyframes celebrationAurora {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes shimmerRibbon {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.celebration-bg {
+  background: linear-gradient(
+    135deg,
+    #0c1a17 0%,
+    #131a28 20%,
+    #1e142e 40%,
+    #2a1715 60%,
+    #13241b 80%,
+    #0e1a20 100%
+  );
+  background-size: 300% 300%;
+  animation: celebrationAurora 16s ease infinite;
+}
+
+.celebration-glow-orb {
+  animation: pulseGlow 6s ease-in-out infinite;
+}
