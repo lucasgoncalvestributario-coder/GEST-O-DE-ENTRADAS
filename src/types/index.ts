@@ -37,6 +37,7 @@ export type PaymentMethod =
 
 export interface Sale {
   id: string;
+  code?: string;
   date: string; // YYYY-MM-DD
   time?: string; // HH:mm
   monthKey: string; // YYYY-MM
@@ -54,6 +55,7 @@ export interface Sale {
   notes?: string;
   createdAt: number;
   createdBy?: string;
+  sellerName?: string;
 }
 
 export interface Expense {
@@ -255,4 +257,25 @@ export interface DailyClosingData {
   diff: number;
   salesCount: number;
   expensesCount: number;
+  registerRecord?: DailyRegisterRecord;
+}
+
+export interface DailyRegisterRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  monthKey: string; // YYYY-MM
+  status: 'aberto' | 'fechado';
+  openedAt: number;
+  closedAt?: number;
+  closedBy?: string;
+  isAutoClosed?: boolean;
+  salesTotal: number;
+  salesCount: number;
+  expensesTotal: number;
+  expensesCount: number;
+  resultTotal: number;
+  dailyTarget: number;
+  isDailyTargetMet: boolean;
+  notes?: string;
+  updatedAt: number;
 }

@@ -15,7 +15,14 @@ import {
   GorduraUsage,
 } from './types';
 import { appStorage } from './services/storage';
-import { calculateMonthTarget, calculateDailyClosing, formatMonthYear, formatDate } from './utils/calculations';
+import { calculateMonthTarget, calculateDailyClosing, formatMonthYear, formatDate, formatCurrency } from './utils/calculations';
+import {
+  getBrasiliaDateParts,
+  getTodayBrasilia,
+  getCurrentMonthBrasilia,
+  getCurrentTimeBrasilia,
+  formatBrasiliaDateTime,
+} from './utils/dateUtils';
 import { NotificationService } from './utils/notifications';
 import { triggerCelebrationEffect } from './utils/celebration';
 
@@ -31,12 +38,16 @@ import { NewExpenseModal } from './components/NewExpenseModal';
 import { DailyClosingModal } from './components/DailyClosingModal';
 import { GorduraModal } from './components/GorduraModal';
 import { CelebrationModal, CelebrationInfo } from './components/CelebrationModal';
+import { CloudSyncModal } from './components/CloudSyncModal';
 
 export default function App() {
+  // Live ticker tracking Horário de Brasília (America/Sao_Paulo)
+  const [nowBrasilia, setNowBrasilia] = useState<Date>(() => new Date());
+
   // Navigation & Role State
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [userRole, setUserRole] = useState<UserRole>(() => appStorage.getUserRole());
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-09');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => getCurrentMonthBrasilia());
 
   // Core Data Collections
   const [sales, setSales] = useState<Sale[]>(() => appStorage.getSales());
@@ -53,8 +64,94 @@ export default function App() {
   const [isNewExpenseOpen, setIsNewExpenseOpen] = useState(false);
   const [isDailyClosingOpen, setIsDailyClosingOpen] = useState(false);
   const [isGorduraModalOpen, setIsGorduraModalOpen] = useState(false);
+  const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
   const [celebrationData, setCelebrationData] = useState<CelebrationInfo | null>(null);
   const [isCelebrationOpen, setIsCelebrationOpen] = useState(false);
+
+  // Live ticker that monitors Horário de Brasília and handles the EXACT 00:00:00 midnight calendar turnover
+  useEffect(() => {
+    let lastDateStr = getTodayBrasilia();
+
+    const intervalId = setInterval(() => {
+      const currentNow = new Date();
+      setNowBrasilia(currentNow);
+      const currentDateStr = getTodayBrasilia(currentNow);
+
+      // Check if a calendar day turnover occurred (EXACTLY at 00:00:00 Brasília time)
+      if (currentDateStr !== lastDateStr) {
+        console.log(`[Virada de Dia] Transição de ${lastDateStr} para ${currentDateStr} às 00:00:00 BRT`);
+
+        // 1. Automatically consolidate previous day's register if not already manually closed
+        const currentSales = appStorage.getSales();
+        const currentExpenses = appStorage.getExpenses();
+        const prevSales = currentSales.filter((s) => s.date === lastDateStr);
+        const prevExpenses = currentExpenses.filter((e) => e.date === lastDateStr);
+        const prevSalesTotal = prevSales.reduce((acc, s) => acc + (s.totalAmount || 0), 0);
+        const prevExpensesTotal = prevExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
+
+        const existingRecord = appStorage.getDailyRegisterForDate(lastDateStr);
+        if (!existingRecord || existingRecord.status === 'aberto') {
+          appStorage.closeDailyRegister(
+            lastDateStr,
+            'Sistema (Virada Automática 00:00:00)',
+            true,
+            {
+              salesTotal: prevSalesTotal,
+              salesCount: prevSales.length,
+              expensesTotal: prevExpensesTotal,
+              expensesCount: prevExpenses.length,
+              resultTotal: prevSalesTotal - prevExpensesTotal,
+              dailyTarget: 0,
+              isDailyTargetMet: true,
+              notes: `Encerramento automático na virada de calendário de ${lastDateStr} para ${currentDateStr}.`,
+            }
+          );
+        }
+
+        // 2. Advance to the new day
+        const oldDate = lastDateStr;
+        lastDateStr = currentDateStr;
+
+        // 3. Keep selectedMonth in sync if following the active month
+        const newMonth = currentDateStr.substring(0, 7);
+        const oldMonth = oldDate.substring(0, 7);
+        setSelectedMonth((curr) => (curr === oldMonth ? newMonth : curr));
+
+        // Refresh state from storage
+        setSales(appStorage.getSales());
+        setExpenses(appStorage.getExpenses());
+      }
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  // Subscribe to storage changes and perform initial sync with the shared server database
+  useEffect(() => {
+    appStorage.syncWithServer().then(() => {
+      setSales(appStorage.getSales());
+      setExpenses(appStorage.getExpenses());
+      setGorduraUsages(appStorage.getGorduraUsages());
+      setGoals(appStorage.getGoals());
+      setClosedPeriods(appStorage.getClosedPeriods());
+      setProducts(appStorage.getProducts());
+      setCustomers(appStorage.getCustomers());
+      setSuppliers(appStorage.getSuppliers());
+    });
+
+    const unsubscribe = appStorage.subscribe(() => {
+      setSales(appStorage.getSales());
+      setExpenses(appStorage.getExpenses());
+      setGorduraUsages(appStorage.getGorduraUsages());
+      setGoals(appStorage.getGoals());
+      setClosedPeriods(appStorage.getClosedPeriods());
+      setProducts(appStorage.getProducts());
+      setCustomers(appStorage.getCustomers());
+      setSuppliers(appStorage.getSuppliers());
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Sync state changes with storage when modified
   const handleSetUserRole = (role: UserRole) => {
@@ -68,7 +165,7 @@ export default function App() {
     return found ? found.targetAmount : 20000;
   }, [goals, selectedMonth]);
 
-  // Compute live intelligence calculations
+  // Compute live intelligence calculations in Horário de Brasília
   const targetCalculation = useMemo(() => {
     return calculateMonthTarget(
       selectedMonth,
@@ -76,25 +173,22 @@ export default function App() {
       sales,
       expenses,
       closedPeriods,
-      new Date(),
+      nowBrasilia,
       gorduraUsages
     );
-  }, [selectedMonth, currentGoalAmount, sales, expenses, closedPeriods, gorduraUsages]);
+  }, [selectedMonth, currentGoalAmount, sales, expenses, closedPeriods, nowBrasilia, gorduraUsages]);
 
-  // Compute daily closing data (defaulting to today's date in context of the month)
+  // Compute daily closing data (strictly respecting America/Sao_Paulo)
   const dailyClosingData = useMemo(() => {
-    // Determine reference date: if selectedMonth matches current year-month, use today; else use 15th of that month
-    const today = new Date();
-    const todayIso = today.toISOString().split('T')[0];
-    const todayMonth = todayIso.substring(0, 7);
+    const todayStr = getTodayBrasilia(nowBrasilia);
+    const todayMonth = todayStr.substring(0, 7);
 
-    const refDate =
-      selectedMonth === todayMonth
-        ? todayIso
-        : `${selectedMonth}-15`;
+    // If viewing the current calendar month in Brasília, the active cash register date is todayStr
+    // If viewing another month, use 15th of that month as reference
+    const refDate = selectedMonth === todayMonth ? todayStr : `${selectedMonth}-15`;
 
     return calculateDailyClosing(refDate, sales, expenses, targetCalculation, closedPeriods, gorduraUsages);
-  }, [selectedMonth, sales, expenses, targetCalculation, closedPeriods, gorduraUsages]);
+  }, [selectedMonth, sales, expenses, targetCalculation, closedPeriods, gorduraUsages, nowBrasilia]);
 
   // Compute previous month stats for comparison
   const previousMonthInfo = useMemo(() => {
@@ -291,7 +385,7 @@ export default function App() {
     setProducts(appStorage.getProducts());
     setCustomers(appStorage.getCustomers());
     setSuppliers(appStorage.getSuppliers());
-    setSelectedMonth('2026-09');
+    setSelectedMonth('2026-10');
     NotificationService.playCelebrationFanfare();
   };
 
@@ -305,7 +399,7 @@ export default function App() {
     setProducts(appStorage.getProducts());
     setCustomers(appStorage.getCustomers());
     setSuppliers(appStorage.getSuppliers());
-    setSelectedMonth('2026-09');
+    setSelectedMonth('2026-10');
     NotificationService.playSuccessChime();
   };
 
@@ -343,6 +437,37 @@ export default function App() {
         triggerCelebrationEffect('day');
       }, 200);
     }
+  };
+
+  // Handlers for Cash Register Manual Closing & Reopening
+  const handleCloseCashRegister = (date: string, notes?: string) => {
+    appStorage.closeDailyRegister(
+      date,
+      userRole === 'admin' ? 'Administrador' : 'Operador',
+      false,
+      {
+        salesTotal: dailyClosingData.salesToday,
+        salesCount: dailyClosingData.salesCount,
+        expensesTotal: dailyClosingData.expensesToday,
+        expensesCount: dailyClosingData.expensesCount,
+        resultTotal: dailyClosingData.resultToday,
+        dailyTarget: dailyClosingData.dailyTarget,
+        isDailyTargetMet: dailyClosingData.isDailyTargetMet,
+        notes,
+      }
+    );
+    NotificationService.playSuccessChime();
+    NotificationService.sendNotification(
+      'Fronteira Cutelaria',
+      `Caixa do dia ${formatDate(date)} fechado com sucesso! Total: ${formatCurrency(dailyClosingData.salesToday)}`
+    );
+    setNowBrasilia(new Date());
+  };
+
+  const handleReopenCashRegister = (date: string) => {
+    appStorage.reopenDailyRegister(date);
+    NotificationService.playSuccessChime();
+    setNowBrasilia(new Date());
   };
 
   // Daily goal achieved status (for celebratory theme until the day turns)
@@ -391,6 +516,7 @@ export default function App() {
         onOpenClosing={() => setIsDailyClosingOpen(true)}
         onOpenNewSale={() => setIsNewSaleOpen(true)}
         onOpenNewExpense={() => setIsNewExpenseOpen(true)}
+        onOpenCloudSync={() => setIsCloudSyncOpen(true)}
       />
 
       {/* Navigation Tabs (Top on Desktop, Bottom on Mobile) */}
@@ -508,6 +634,8 @@ export default function App() {
         onQuickCompleteWithGordura={(date, missing) => {
           handleQuickCompleteTodayWithGordura(date, missing);
         }}
+        onCloseCashRegister={handleCloseCashRegister}
+        onReopenCashRegister={handleReopenCashRegister}
       />
 
       {/* Gordura (Surplus / Reserve) Modal */}
@@ -526,6 +654,22 @@ export default function App() {
         onClose={() => setIsCelebrationOpen(false)}
         celebrationData={celebrationData}
         onNewSale={() => setIsNewSaleOpen(true)}
+      />
+
+      {/* Cloud Sync & Backup Modal */}
+      <CloudSyncModal
+        isOpen={isCloudSyncOpen}
+        onClose={() => setIsCloudSyncOpen(false)}
+        onDataRestored={() => {
+          setSales(appStorage.getSales());
+          setExpenses(appStorage.getExpenses());
+          setGorduraUsages(appStorage.getGorduraUsages());
+          setGoals(appStorage.getGoals());
+          setClosedPeriods(appStorage.getClosedPeriods());
+          setProducts(appStorage.getProducts());
+          setCustomers(appStorage.getCustomers());
+          setSuppliers(appStorage.getSuppliers());
+        }}
       />
     </div>
   );

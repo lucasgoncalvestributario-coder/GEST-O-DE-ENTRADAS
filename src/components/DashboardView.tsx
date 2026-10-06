@@ -8,6 +8,7 @@ import {
   Plus,
   Sparkles,
   Lock,
+  Moon,
   Trophy,
   PartyPopper,
   ShieldCheck,
@@ -38,8 +39,10 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   calc,
   selectedMonth,
+  dailyClosing,
   onOpenNewSale,
   onOpenNewExpense,
+  onOpenDailyClosing,
   onOpenGorduraModal,
   onQuickCompleteTodayWithGordura,
 }) => {
@@ -120,6 +123,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>＋ NOVA SAÍDA</span>
             </button>
+
+            {onOpenDailyClosing && (
+              <button
+                id="btn-main-fechar-caixa"
+                onClick={onOpenDailyClosing}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#1b2232] hover:bg-[#242e43] text-indigo-300 hover:text-indigo-200 font-bold border border-indigo-500/30 px-3.5 sm:px-4 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl active:scale-95 transition-all text-xs sm:text-sm"
+                title="Conferir vendas de hoje e realizar fechamento do caixa"
+              >
+                <Moon className="w-4 h-4 text-indigo-400 stroke-[2.5]" />
+                <span className="hidden sm:inline">CAIXA DO DIA</span>
+                <span className="sm:hidden">CAIXA</span>
+              </button>
+            )}
           </div>
         </div>
 

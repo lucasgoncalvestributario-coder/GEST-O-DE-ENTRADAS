@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DailyClosingData, Sale, Expense } from '../types';
 import { formatCurrency, formatDate } from '../utils/calculations';
+import { formatBrasiliaDateTime } from '../utils/dateUtils';
 import {
   Moon,
   X,
@@ -11,6 +12,9 @@ import {
   Calendar,
   ShieldCheck,
   Sparkles,
+  Lock,
+  Clock,
+  Unlock,
 } from 'lucide-react';
 
 interface DailyClosingModalProps {
@@ -21,6 +25,8 @@ interface DailyClosingModalProps {
   expenses?: Expense[];
   onOpenGorduraModal?: () => void;
   onQuickCompleteWithGordura?: (date: string, missingAmount: number) => void;
+  onCloseCashRegister?: (date: string, notes?: string) => void;
+  onReopenCashRegister?: (date: string) => void;
 }
 
 export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
@@ -31,8 +37,11 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
   expenses = [],
   onOpenGorduraModal,
   onQuickCompleteWithGordura,
+  onCloseCashRegister,
+  onReopenCashRegister,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [closingConfirmed, setClosingConfirmed] = useState(false);
 
   if (!isOpen || !closingData) return null;
 
@@ -45,6 +54,8 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
   const availableGordura = closingData.availableGordura || 0;
   const gorduraUsed = closingData.gorduraUsedToday || 0;
   const effectiveSales = closingData.effectiveSalesToday ?? (closingData.salesToday + gorduraUsed);
+  const registerRecord = closingData.registerRecord;
+  const isClosed = registerRecord?.status === 'fechado';
 
   const generateWhatsAppSummary = () => {
     let statusText = '';
@@ -64,8 +75,13 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
       ? '⚡ Meta Média (Segunda-feira)'
       : '🌱 Meta Baixa (Terça a Quinta)';
 
+    const registerStatusText = isClosed
+      ? `🔒 Caixa FECHADO às ${registerRecord?.closedAt ? formatBrasiliaDateTime(registerRecord.closedAt) : 'horário regular'}`
+      : `🟢 Caixa ABERTO`;
+
     return `*🌙 FECHAMENTO DO DIA — FRONTEIRA CUTELARIA*
 📅 Data: ${formatDate(closingData.date)} (${closingData.dayOfWeekName || ''})
+${registerStatusText}
 🎯 Tipo de Meta: ${tierBadge}
 
 💰 *Vendas reais hoje:* ${formatCurrency(closingData.salesToday)} (${closingData.salesCount} vendas)${
@@ -93,6 +109,14 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleManualClose = () => {
+    if (onCloseCashRegister) {
+      onCloseCashRegister(closingData.date);
+      setClosingConfirmed(true);
+      setTimeout(() => setClosingConfirmed(false), 3000);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div className="relative w-full max-w-lg bg-[#141822] border border-[#2b3348] rounded-3xl shadow-2xl overflow-hidden my-auto animate-scale-up">
@@ -112,15 +136,89 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
           </button>
         </div>
 
-        <div className="p-5 sm:p-6 space-y-5 max-h-[82vh] overflow-y-auto">
-          <div className="flex items-center justify-between text-xs text-slate-400 bg-[#1a202d] px-3.5 py-2 rounded-xl border border-[#2c354a]">
-            <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-amber-500" />
-              Data de Referência:
-            </span>
-            <strong className="text-slate-200 font-mono text-sm">
-              {formatDate(closingData.date)}
-            </strong>
+        <div className="p-5 sm:p-6 space-y-4 max-h-[82vh] overflow-y-auto">
+          {/* Calendar & Timezone Banner */}
+          <div className="bg-[#181d2a] border border-[#2b354c] rounded-2xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                <span>Data do Caixa:</span>
+              </span>
+              <strong className="text-slate-100 font-mono text-sm">
+                {formatDate(closingData.date)} ({closingData.dayOfWeekName || ''})
+              </strong>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1.5 border-t border-[#232b3e]">
+              <span className="flex items-center gap-1.5 text-indigo-300">
+                <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Horário Oficial: <strong>Brasília (America/Sao_Paulo)</strong></span>
+              </span>
+              <span className="text-amber-400 font-bold">
+                Virada exata às 00:00:00
+              </span>
+            </div>
+          </div>
+
+          {/* Cash Register State Banner */}
+          <div
+            className={`p-3.5 rounded-2xl border transition-all ${
+              isClosed
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                : 'bg-gradient-to-r from-amber-950/40 via-[#1e2433] to-[#181d2a] border-amber-500/40 text-amber-200'
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                {isClosed ? (
+                  <Lock className="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse mt-1 flex-shrink-0" />
+                )}
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-wider">
+                    {isClosed ? '🔒 CAIXA DO DIA FECHADO' : '🟢 CAIXA ABERTO (DIA EM ANDAMENTO)'}
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    {isClosed
+                      ? `Fechamento registrado em ${registerRecord?.closedAt ? formatBrasiliaDateTime(registerRecord.closedAt) : 'horário regular'} por ${registerRecord?.closedBy || 'Operador'}.`
+                      : 'O caixa NÃO é zerado antes da meia-noite. As vendas continuam no caixa até a virada automática das 00:00:00.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                {isClosed && onReopenCashRegister && !registerRecord?.isAutoClosed && (
+                  <button
+                    type="button"
+                    onClick={() => onReopenCashRegister(closingData.date)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#252f44] hover:bg-[#303c58] text-amber-300 border border-amber-500/30 rounded-xl transition-all"
+                  >
+                    <Unlock className="w-3.5 h-3.5" />
+                    <span>Reabrir Caixa</span>
+                  </button>
+                )}
+
+                {!isClosed && onCloseCashRegister && (
+                  <button
+                    id="btn-modal-fechar-caixa"
+                    type="button"
+                    onClick={handleManualClose}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg active:scale-95 transition-all"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>Fechar Caixa</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {closingConfirmed && (
+              <div className="mt-2 pt-2 border-t border-emerald-500/30 text-xs text-emerald-300 font-bold flex items-center gap-1.5 animate-fade-in">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>Fechamento salvo com sucesso no histórico da cutelaria!</span>
+              </div>
+            )}
           </div>
 
           {/* Metrics Overview */}
@@ -248,6 +346,57 @@ export const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* 5. VENDAS DO DIA DETALHADAS */}
+          <div className="bg-[#171c27] border border-[#273044] rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-[#232b3d] pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-base">💰</span>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-200">
+                  Vendas Registradas Hoje ({daySales.length})
+                </h4>
+              </div>
+              <span className="text-xs font-mono font-bold text-emerald-400">
+                {formatCurrency(closingData.salesToday)}
+              </span>
+            </div>
+
+            {daySales.length === 0 ? (
+              <div className="text-center py-4 text-xs text-slate-500 bg-[#121620] rounded-xl border border-dashed border-[#242c3e]">
+                Nenhuma venda registrada nesta data.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {daySales.map((sale, idx) => (
+                  <div
+                    key={sale.id || idx}
+                    className="bg-[#12151f] border border-[#222a3b] hover:border-amber-500/30 rounded-xl p-2.5 flex items-center justify-between text-xs transition-colors"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="font-bold text-slate-200 truncate">
+                        {sale.productName}
+                      </div>
+                      <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                        {sale.time && <span className="font-mono text-amber-400/90">{sale.time}</span>}
+                        <span className="uppercase text-[9px] px-1 py-0.2 rounded bg-[#1e2535] text-slate-300">
+                          {sale.paymentMethod}
+                        </span>
+                        {sale.customerName && <span>• {sale.customerName}</span>}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <span className="font-mono font-bold text-emerald-400">
+                        {formatCurrency(sale.totalAmount)}
+                      </span>
+                      <span className="text-[10px] text-slate-500 block font-mono">
+                        {sale.quantity}x {formatCurrency(sale.unitPrice)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Status Message */}
           <div

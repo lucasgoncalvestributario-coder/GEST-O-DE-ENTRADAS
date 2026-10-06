@@ -506,8 +506,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         {/* Footer info on print */}
         <div className="text-center text-[11px] text-slate-500 pt-4 border-t border-[#22293b] print:border-slate-200">
           Fronteira Cutelaria • Sistema de Gestão e Cutelaria Artesanal • Gerado em{' '}
-          {new Date().toLocaleDateString('pt-BR')} às{' '}
-          {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          {new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })} às{' '}
+          {new Date().toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ExpenseCategory, PaymentMethod, Supplier } from '../types';
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '../utils/constants';
 import { formatCurrency } from '../utils/calculations';
+import { getTodayBrasilia, getCurrentTimeBrasilia } from '../utils/dateUtils';
 import { NotificationService } from '../utils/notifications';
 import { X, CheckCircle, Plus } from 'lucide-react';
 
@@ -16,6 +17,7 @@ interface NewExpenseModalProps {
     supplierName?: string;
     supplierId?: string;
     date: string;
+    time?: string;
     monthKey: string;
   }) => void;
   suppliers?: Supplier[];
@@ -29,7 +31,7 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   suppliers = [],
   selectedMonth,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayBrasilia();
 
   const [category, setCategory] = useState<ExpenseCategory>('fornecedor');
   const [description, setDescription] = useState<string>('Compra de insumos');
@@ -42,14 +44,15 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
   // Sync date with selectedMonth on modal open
   React.useEffect(() => {
     if (isOpen) {
-      if (todayStr.startsWith(selectedMonth)) {
-        setExpenseDate(todayStr);
+      const currentToday = getTodayBrasilia();
+      if (currentToday.startsWith(selectedMonth)) {
+        setExpenseDate(currentToday);
       } else {
         setExpenseDate(`${selectedMonth}-01`);
       }
       setSavedSuccess(null);
     }
-  }, [isOpen, selectedMonth, todayStr]);
+  }, [isOpen, selectedMonth]);
 
   const [savedSuccess, setSavedSuccess] = useState<{
     value: number;
@@ -118,6 +121,7 @@ export const NewExpenseModal: React.FC<NewExpenseModalProps> = ({
       supplierId: supplierId || undefined,
       supplierName: supplierName.trim() || undefined,
       date: expenseDate,
+      time: getCurrentTimeBrasilia(),
       monthKey,
     });
 

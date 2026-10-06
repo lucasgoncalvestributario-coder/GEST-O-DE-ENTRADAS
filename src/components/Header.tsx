@@ -12,6 +12,7 @@ import {
   Calendar,
   ChevronDown,
   Sparkles,
+  Database,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -22,6 +23,7 @@ interface HeaderProps {
   onOpenClosing?: () => void;
   onOpenNewSale?: () => void;
   onOpenNewExpense?: () => void;
+  onOpenCloudSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -32,6 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenClosing,
   onOpenNewSale,
   onOpenNewExpense,
+  onOpenCloudSync,
 }) => {
   const [notificationsActive, setNotificationsActive] = useState<boolean>(
     NotificationService.getPermission() === 'granted'
@@ -39,13 +42,11 @@ export const Header: React.FC<HeaderProps> = ({
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
 
   const availableMonths = [
-    '2026-06',
-    '2026-07',
-    '2026-08',
-    '2026-09',
     '2026-10',
     '2026-11',
     '2026-12',
+    '2026-09',
+    '2026-08',
   ];
 
   const handleToggleNotification = async () => {
@@ -138,6 +139,19 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right Actions */}
         <div className="flex items-center gap-1.5 sm:gap-3">
+          {/* Cloud Database & Backup */}
+          {onOpenCloudSync && (
+            <button
+              id="btn-cloud-sync"
+              onClick={onOpenCloudSync}
+              title="Banco de Dados & Backup em Nuvem"
+              className="flex items-center gap-1.5 bg-[#1a202d] hover:bg-[#22293a] text-slate-200 border border-[#2d364c] px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-xs font-semibold transition-colors"
+            >
+              <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+              <span className="hidden md:inline">Nuvem & Backup</span>
+            </button>
+          )}
+
           {/* Daily Closing Shortcut */}
           <button
             id="btn-quick-closing"

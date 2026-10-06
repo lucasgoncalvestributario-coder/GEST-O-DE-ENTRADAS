@@ -12,16 +12,10 @@ import {
   GorduraDaySummary,
 } from '../types';
 import { MONTH_NAMES_PT } from './constants';
+import { getBrasiliaDateParts, getTodayBrasilia, DAY_OF_WEEK_NAMES_BR } from './dateUtils';
+import { appStorage } from '../services/storage';
 
-export const DAY_OF_WEEK_NAMES = [
-  'Domingo',
-  'Segunda-feira',
-  'Terça-feira',
-  'Quarta-feira',
-  'Quinta-feira',
-  'Sexta-feira',
-  'Sábado',
-];
+export const DAY_OF_WEEK_NAMES = DAY_OF_WEEK_NAMES_BR;
 
 /**
  * Format a number as Brazilian Real (R$)
@@ -127,9 +121,10 @@ export function calculateDayTargetsForMonth(
   const monthIndex = (parseInt(monthStr, 10) || 9) - 1;
   const totalDays = new Date(year, monthIndex + 1, 0).getDate();
 
-  const currentYear = currentDateObj.getFullYear();
-  const currentMonthIdx = currentDateObj.getMonth();
-  const currentDay = currentDateObj.getDate();
+  const brParts = getBrasiliaDateParts(currentDateObj);
+  const currentYear = brParts.year;
+  const currentMonthIdx = brParts.monthIndex;
+  const currentDay = brParts.day;
 
   // Determine current day context
   let evaluatedDay: number;
@@ -148,8 +143,8 @@ export function calculateDayTargetsForMonth(
   for (let day = 1; day <= totalDays; day++) {
     const dayStr = day < 10 ? `0${day}` : `${day}`;
     const dateStr = `${yearStr}-${monthStr}-${dayStr}`;
-    const dateObj = new Date(year, monthIndex, day);
-    const dayOfWeek = dateObj.getDay();
+    const dateMidday = new Date(`${dateStr}T12:00:00-03:00`);
+    const dayOfWeek = dateMidday.getUTCDay();
     const dayOfWeekName = DAY_OF_WEEK_NAMES[dayOfWeek];
     const { isClosed, reason } = isDateInClosedPeriods(dateStr, closedPeriods);
     const { tier, tierLabel, weight } = getDayWeightAndTier(dayOfWeek);
@@ -367,10 +362,11 @@ export function calculateMonthTarget(
     currentDateObj
   );
 
-  // Determine current day in the context of the selected month
-  const currentYear = currentDateObj.getFullYear();
-  const currentMonthIdx = currentDateObj.getMonth();
-  const currentDay = currentDateObj.getDate();
+  // Determine current day in the context of the selected month strictly in America/Sao_Paulo
+  const brParts = getBrasiliaDateParts(currentDateObj);
+  const currentYear = brParts.year;
+  const currentMonthIdx = brParts.monthIndex;
+  const currentDay = brParts.day;
 
   let evaluatedDay: number;
   let isCurrentMonth = false;
@@ -389,7 +385,7 @@ export function calculateMonthTarget(
 
   // Find today's target info
   const todayDayStr = evaluatedDay > 0 ? (evaluatedDay < 10 ? `0${evaluatedDay}` : `${evaluatedDay}`) : '01';
-  const todayDateStr = `${yearStr}-${monthStr}-${todayDayStr}`;
+  const todayDateStr = isCurrentMonth ? brParts.dateStr : `${yearStr}-${monthStr}-${todayDayStr}`;
   const todayDayInfo = dayTargets.find((d) => d.date === todayDateStr) || dayTargets[0] || {
     target: 0,
     baseTarget: 0,
@@ -565,9 +561,10 @@ export function calculateDailyClosing(
   const resultToday = salesToday - expensesToday;
 
   // Extract monthKey and day from date string
-  const [yearStr, monthStr, dayStr] = (targetDateStr || '2026-09-01').split('-');
-  const dateObj = new Date(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayStr, 10));
-  const dayOfWeek = dateObj.getDay();
+  const safeDateStr = targetDateStr || getTodayBrasilia();
+  const [yearStr, monthStr, dayStr] = safeDateStr.split('-');
+  const dateMidday = new Date(`${safeDateStr}T12:00:00-03:00`);
+  const dayOfWeek = dateMidday.getUTCDay();
   const dayOfWeekName = DAY_OF_WEEK_NAMES[dayOfWeek];
   const { tier, tierLabel } = getDayWeightAndTier(dayOfWeek);
 
@@ -612,6 +609,7 @@ export function calculateDailyClosing(
     remainingOpenDaysCount > 0 && unmetDeficit > 0 ? unmetDeficit / remainingOpenDaysCount : 0;
 
   const availableGordura = targetCalc?.gorduraBalance?.available ?? 0;
+  const registerRecord = appStorage.getDailyRegisterForDate(targetDateStr);
 
   return {
     date: targetDateStr,
@@ -634,5 +632,6 @@ export function calculateDailyClosing(
     diff,
     salesCount: daySales.length,
     expensesCount: dayExpenses.length,
+    registerRecord,
   };
 }

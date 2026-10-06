@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SaleCategory, PaymentMethod, Product, Customer } from '../types';
 import { SALE_CATEGORIES, PAYMENT_METHODS } from '../utils/constants';
 import { formatCurrency } from '../utils/calculations';
+import { getTodayBrasilia, getCurrentTimeBrasilia } from '../utils/dateUtils';
 import { NotificationService } from '../utils/notifications';
 import confetti from 'canvas-confetti';
 import {
@@ -42,8 +43,8 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
   customers = [],
   selectedMonth,
 }) => {
-  // Today's date default
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Today's date default in Horário de Brasília (America/Sao_Paulo)
+  const todayStr = getTodayBrasilia();
 
   const [category, setCategory] = useState<SaleCategory>('faca');
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -58,14 +59,15 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
   // Sync date with selectedMonth on modal open
   React.useEffect(() => {
     if (isOpen) {
-      if (todayStr.startsWith(selectedMonth)) {
-        setSaleDate(todayStr);
+      const currentToday = getTodayBrasilia();
+      if (currentToday.startsWith(selectedMonth)) {
+        setSaleDate(currentToday);
       } else {
         setSaleDate(`${selectedMonth}-01`);
       }
       setSavedSuccess(null);
     }
-  }, [isOpen, selectedMonth, todayStr]);
+  }, [isOpen, selectedMonth]);
 
   // Success state
   const [savedSuccess, setSavedSuccess] = useState<{
@@ -148,6 +150,7 @@ export const NewSaleModal: React.FC<NewSaleModalProps> = ({
       customerName: customerName.trim() || undefined,
       customerPhone: customerPhone.trim() || undefined,
       date: saleDate,
+      time: getCurrentTimeBrasilia(),
       monthKey,
     });
 

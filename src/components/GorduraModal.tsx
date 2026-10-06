@@ -370,7 +370,7 @@ export const GorduraModal: React.FC<GorduraModalProps> = ({
                               {formatDate(u.date)}
                             </span>
                             <span className="text-[10px] text-slate-500">
-                              {new Date(u.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(u.createdAt).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
                           <p className="text-[11px] text-slate-400 mt-0.5">
